@@ -3,7 +3,12 @@
  * Based on: https://github.com/open-quantum-safe/liboqs/issues/48
  */
 
+#ifndef _WIN32
 #define _GNU_SOURCE
+#else
+#pragma once
+#define _CRT_SECURE_NO_WARNINGS 1
+#endif
 #define __STDC_WANT_LIB_EXT1__ 1
 #include <assert.h>
 #include <errno.h>
@@ -20,8 +25,12 @@
 #define MEMZERO_TEST_LARGE_BLOCK_SIZE   0x1000000L
 #define MEMZERO_BENCH_SECONDS           1
 
+#ifndef _WIN32
 // Number of times to write the secret.
 #define MEMZERO_STACK_SIZE              (SIGSTKSZ + sizeof(secret))
+#else
+#define MEMZERO_STACK_SIZE				sizeof(secret)
+#endif
 
 // The secret that we write out to the stack. 
 // After cleaning, we shouldn't be able to find it in our stack.
@@ -64,16 +73,17 @@ memzero_testcase_t memzero_testcases[] = {
     { memzero_alg_volatile2, "volatile2" },
     { memzero_alg_volatile3, "volatile3" },
     { memzero_alg_sodium, "sodium" },
-    { memzero_alg_explicit_bzero, "explicit_bzero" },
 #ifdef __STDC_LIB_EXT1__
     { memzero_alg_memset_s, "memset_s" },
 #endif
-#ifdef _WIN32
-    { memzero_alg_SecureZeroMemory, "SecureZeroMemory" }
+#ifndef _WIN32
+	{ memzero_alg_explicit_bzero, "explicit_bzero" },
+#else
+	{ memzero_alg_SecureZeroMemory, "SecureZeroMemory" }
 #endif
 };
 
-
+#ifndef _WIN32
 // Verify that we are on the custom stack.
 static void assert_on_stack(void) {
     stack_t current_stack;
@@ -107,6 +117,7 @@ static void call_on_stack(void (*fn)(int)) {
     sigaction(SIGUSR1, &old_action, NULL);
     sigaltstack(&old_stack, NULL);
 }
+#endif
 
 /**
  * Test a provided memory clean algorithm. Must be called from the custom stack.
@@ -237,11 +248,6 @@ void memzero_sodium(void * const pnt, const size_t len) {
     }
 }
 
-// NOTE: Platforms that do not support explicit_bzero will throw an error here!
-void memzero_explicit_bzero(void * const pnt, const size_t len) {
-    explicit_bzero(pnt, len);
-}
-
 #ifdef __STDC_LIB_EXT1__
 void memzero_memset_s(void * const pnt, const size_t len) {
     if (0U < len && memset_s(pnt, (rsize_t)len, 0, (rsize_t)len) != 0) {
@@ -253,6 +259,10 @@ void memzero_memset_s(void * const pnt, const size_t len) {
 #ifdef _WIN32
 void memzero_SecureZeroMemory(void * const pnt, const size_t len) {
     SecureZeroMemory(pnt, len);
+}
+#else
+void memzero_explicit_bzero(void * const pnt, const size_t len) {
+	explicit_bzero(pnt, len);
 }
 #endif
 
@@ -272,13 +282,14 @@ memzero_func_t memzero_func(enum memzero_alg_name alg_name) {
             return &memzero_volatile3;
         case memzero_alg_sodium:
             return &memzero_sodium;
-        case memzero_alg_explicit_bzero:
-            return &memzero_explicit_bzero;
     #ifdef __STDC_LIB_EXT1__
         case memzero_alg_memset_s:
             return &memzero_memset_s;
     #endif
-    #ifdef _WIN32
+    #ifndef _WIN32
+		case memzero_alg_explicit_bzero:
+			return &memzero_explicit_bzero;
+	#else
         case memzero_alg_SecureZeroMemory:
             return memzero_SecureZeroMemory;
     #endif
@@ -319,10 +330,12 @@ static int memzero_bench(enum memzero_alg_name alg_name, const char *name) {
 
 int main(void) {
     int success;
-    const char * current_test;
+    const char *current_test;
     size_t memzero_testcases_len = sizeof(memzero_testcases) / sizeof(struct memzero_testcase);
 
+#ifndef _WIN32
     call_on_stack(memzero_test_correctness_signal_handler);
+#endif
 
     for (size_t i = 0; i < memzero_testcases_len; i++) {
         current_test = memzero_testcases[i].name;

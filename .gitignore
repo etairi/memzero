@@ -6,8 +6,11 @@
 *.exe
 *.out
 
-# Build directory
+# Build directories
 build/
+Debug/
+Release/
 
-# VS Code directory
+# VS Code directories
 .vscode/
+.vs/
