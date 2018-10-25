@@ -94,7 +94,7 @@ memzero_testcase_t memzero_testcases[] = {
 };
 
 #ifdef _WIN32
-// Windows does not offer memmem function, so we need to implement it.
+// Windows does not offer memmem function by default.
 void *memmem(const void *haystack, size_t haystack_len,
 			 const void * const needle, const size_t needle_len)
 {
@@ -126,6 +126,8 @@ static void call_on_stack(DWORD(_stdcall Fn)(LPVOID)) {
 
 	SwitchToFiber(stack_fiber);
 	stack_pointer = GetCurrentFiber();
+
+	DeleteFiber(stack_fiber);
 }
 #else
 // Verify that we are on the custom stack.
