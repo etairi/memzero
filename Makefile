@@ -1,5 +1,6 @@
 CC=gcc
-CFLAGS=-fno-builtin-memset -Wall -lm
+CFLAGS=-Wall
+LIBS=-lm
 RM=rm -rf
 
 SRC_DIR=src
@@ -11,7 +12,7 @@ all: build
 
 build: $(SRC)
 	mkdir -p $(OUT_DIR)
-	$(CC) $(CFLAGS) $(SRC) -o $(OUT)
+	$(CC) $(CFLAGS) $(SRC) $(LIBS) -o $(OUT)
 
 debug: CFLAGS+= -DDEBUG
 debug: build
