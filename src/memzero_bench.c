@@ -63,7 +63,7 @@ enum memzero_alg_name {
 #endif
 #ifdef _WIN32
 	memzero_alg_SecureZeroMemory,
-#else
+#elif !defined(__APPLE__)
 	memzero_alg_explicit_bzero,
 #endif
     memzero_alg_default
@@ -88,7 +88,7 @@ memzero_testcase_t memzero_testcases[] = {
 #endif
 #ifdef _WIN32
 	{ memzero_alg_SecureZeroMemory, "SecureZeroMemory" },
-#else
+#elif !defined(__APPLE__)
 	{ memzero_alg_explicit_bzero, "explicit_bzero" }
 #endif
 };
@@ -324,7 +324,7 @@ void memzero_memset_s(void * const pnt, const size_t len) {
 void memzero_SecureZeroMemory(void * const pnt, const size_t len) {
     SecureZeroMemory(pnt, len);
 }
-#else
+#elif !defined(__APPLE__)
 void memzero_explicit_bzero(void * const pnt, const size_t len) {
 	explicit_bzero(pnt, len);
 }
@@ -353,7 +353,7 @@ memzero_func_t memzero_func(enum memzero_alg_name alg_name) {
     #ifdef _WIN32
 		case memzero_alg_SecureZeroMemory:
 			return memzero_SecureZeroMemory;
-	#else
+	#elif !defined(__APPLE__)
 		case memzero_alg_explicit_bzero:
 			return &memzero_explicit_bzero;
     #endif
