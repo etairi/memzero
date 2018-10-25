@@ -18,6 +18,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include "ds_benchmark.h"
 
 // Constants for our benchmarks.
@@ -25,11 +28,11 @@
 #define MEMZERO_TEST_LARGE_BLOCK_SIZE   0x1000000L
 #define MEMZERO_BENCH_SECONDS           1
 
-#ifndef _WIN32
 // Number of times to write the secret.
-#define MEMZERO_STACK_SIZE              (SIGSTKSZ + sizeof(secret))
+#ifdef _WIN32
+#define MEMZERO_STACK_SIZE				(4096 + sizeof(secret))
 #else
-#define MEMZERO_STACK_SIZE				sizeof(secret)
+#define MEMZERO_STACK_SIZE              (SIGSTKSZ + sizeof(secret))
 #endif
 
 // The secret that we write out to the stack. 
@@ -40,8 +43,14 @@ static const char secret[24] = {
 	0x20, 0x79, 0x6f, 0x75, 0x20, 0x75, 0x70, 0x2c,
 };
 
-// Memory allocated for our stack.
+// Memory and pointer allocated for our stack.
+#ifdef _WIN32
+static char *stack_buf = NULL;
+PVOID stack_pointer = NULL;
+void *main_fiber = NULL;
+#else
 static char stack_buf[MEMZERO_STACK_SIZE];
+#endif
 
 enum memzero_alg_name {
     memzero_alg_memset,
@@ -49,12 +58,13 @@ enum memzero_alg_name {
     memzero_alg_volatile2,
     memzero_alg_volatile3,
     memzero_alg_sodium,
-    memzero_alg_explicit_bzero,
 #ifdef __STDC_LIB_EXT1__
     memzero_alg_memset_s,
 #endif
 #ifdef _WIN32
-    memzero_alg_SecureZeroMemory,
+	memzero_alg_SecureZeroMemory,
+#else
+	memzero_alg_explicit_bzero,
 #endif
     memzero_alg_default
 };
@@ -76,14 +86,48 @@ memzero_testcase_t memzero_testcases[] = {
 #ifdef __STDC_LIB_EXT1__
     { memzero_alg_memset_s, "memset_s" },
 #endif
-#ifndef _WIN32
-	{ memzero_alg_explicit_bzero, "explicit_bzero" },
+#ifdef _WIN32
+	{ memzero_alg_SecureZeroMemory, "SecureZeroMemory" },
 #else
-	{ memzero_alg_SecureZeroMemory, "SecureZeroMemory" }
+	{ memzero_alg_explicit_bzero, "explicit_bzero" }
 #endif
 };
 
-#ifndef _WIN32
+#ifdef _WIN32
+// Windows does not offer memmem function, so we need to implement it.
+void *memmem(const void *haystack, size_t haystack_len,
+			 const void * const needle, const size_t needle_len)
+{
+	if (needle_len == 0) {
+		return (void*)haystack;
+	}
+
+	assert(haystack != NULL);
+	assert(needle != NULL);
+
+	for (const char *h = haystack; haystack_len >= needle_len; ++h, --haystack_len) {
+		if (!memcmp(h, needle, needle_len)) {
+			return h;
+		}
+	}
+	return NULL;
+}
+
+// Verify that we are on the custom stack.
+static void assert_on_stack(void) {
+	assert(stack_pointer != NULL);
+	assert(stack_pointer == GetCurrentFiber());
+}
+
+// Call the provided signal handler on a custom stack.
+static void call_on_stack(DWORD(_stdcall Fn)(LPVOID)) {
+	main_fiber = ConvertThreadToFiber(NULL);
+	void *stack_fiber = CreateFiberEx(MEMZERO_STACK_SIZE, 0, 0, Fn, NULL);
+
+	SwitchToFiber(stack_fiber);
+	stack_pointer = GetCurrentFiber();
+}
+#else
 // Verify that we are on the custom stack.
 static void assert_on_stack(void) {
     stack_t current_stack;
@@ -132,10 +176,15 @@ static char *memzero_test(memzero_func_t memzero) {
     char *result;
 
     assert_on_stack();
-
     memcpy(buf, secret, sizeof(secret));
-    result = memmem(stack_buf, MEMZERO_STACK_SIZE, buf, sizeof(buf));
 
+#ifdef _WIN32
+	ULONG_PTR lo, hi;
+	GetCurrentThreadStackLimits(&lo, &hi);
+	stack_buf = hi - MEMZERO_STACK_SIZE;
+#endif
+
+    result = memmem(stack_buf, MEMZERO_STACK_SIZE, buf, sizeof(buf));
     if (memzero != NULL) {
         memzero(buf, sizeof(buf));
     } else {
@@ -191,10 +240,15 @@ static int memzero_test_correctness_clean(enum memzero_alg_name alg_name, const 
     }
 }
 
+#ifdef _WIN32
+DWORD WINAPI memzero_test_correctness_signal_handler(LPVOID lpParam) {
+#else
 static void memzero_test_correctness_signal_handler(int arg) {
-    (void)(arg);
+	(void)(arg);
+#endif
+	int success = 1;
     size_t memzero_testcases_len = sizeof(memzero_testcases) / sizeof(struct memzero_testcase);
-    const char * current_test;
+    const char *current_test = NULL;
 
     printf("\n================================================================================\n");
     printf("Memory Cleaning Correctness Test\n");
@@ -209,11 +263,19 @@ static void memzero_test_correctness_signal_handler(int arg) {
         }
     }
 
-    printf("Success: all memory cleaning correctness tests passed.\n\n");
-    return;
+	if (success) {
+		printf("Success: all memory cleaning correctness tests passed.\n\n");
+		goto cleanup;
+	}
 
-    error:
+	error:
+		success = 0;
         printf("Error: %s failed the memory cleaning correctness test.\n", current_test);
+
+	cleanup:
+	#ifdef _WIN32
+		SwitchToFiber(main_fiber);
+	#endif
         return;
 }
 
@@ -286,12 +348,12 @@ memzero_func_t memzero_func(enum memzero_alg_name alg_name) {
         case memzero_alg_memset_s:
             return &memzero_memset_s;
     #endif
-    #ifndef _WIN32
+    #ifdef _WIN32
+		case memzero_alg_SecureZeroMemory:
+			return memzero_SecureZeroMemory;
+	#else
 		case memzero_alg_explicit_bzero:
 			return &memzero_explicit_bzero;
-	#else
-        case memzero_alg_SecureZeroMemory:
-            return memzero_SecureZeroMemory;
     #endif
         case memzero_alg_default:
             return memzero_defualt;
@@ -333,9 +395,7 @@ int main(void) {
     const char *current_test;
     size_t memzero_testcases_len = sizeof(memzero_testcases) / sizeof(struct memzero_testcase);
 
-#ifndef _WIN32
     call_on_stack(memzero_test_correctness_signal_handler);
-#endif
 
     for (size_t i = 0; i < memzero_testcases_len; i++) {
         current_test = memzero_testcases[i].name;
