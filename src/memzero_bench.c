@@ -125,8 +125,6 @@ static void call_on_stack(DWORD(_stdcall Fn)(LPVOID)) {
 	void *stack_fiber = CreateFiberEx(MEMZERO_STACK_SIZE, 0, 0, Fn, NULL);
 
 	SwitchToFiber(stack_fiber);
-	stack_pointer = GetCurrentFiber();
-
 	DeleteFiber(stack_fiber);
 }
 #else
@@ -199,11 +197,15 @@ static char *memzero_test(memzero_func_t memzero) {
 
 /**
  * Verify the secret is where we expect it to be if things are not zeroed out properly.
- * This implementation uses memset, which should get optimized out. If optimizations aren't 
+ * This implementation uses memset, which should get optimized out. If optimizations are not 
  * enabled, this test is skipped.
+ *
+ * In GCC the macro __OPTIMIZE__ is defined in all optimizing compilations. Whereas MSVC does
+ * not define such a macro. Hence, we define our own macro _MSVC_OPTIMIZE only for the Release
+ * configuration, which uses optimizations.
  */
 static int memzero_test_correctness_noclean() {
-#ifdef __OPTIMIZE__
+#if defined(__OPTIMIZE__) || defined(_MSVC_OPTIMIZE)
     char *buf;
     buf = memzero_test(NULL);
 
@@ -243,7 +245,8 @@ static int memzero_test_correctness_clean(enum memzero_alg_name alg_name, const 
 }
 
 #ifdef _WIN32
-DWORD WINAPI memzero_test_correctness_signal_handler(LPVOID lpParam) {
+static DWORD WINAPI memzero_test_correctness_signal_handler(LPVOID lpParam) {
+	stack_pointer = GetCurrentFiber();
 #else
 static void memzero_test_correctness_signal_handler(int arg) {
 	(void)(arg);
