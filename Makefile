@@ -1,12 +1,11 @@
 CC=gcc
-CFLAGS=-Wall
+CFLAGS=-Wall -O3
 LIBS=-lm
 RM=rm -rf
 
-SRC_DIR=src
-SRC=$(SRC_DIR)/memzero_bench.c
+SRC=src/memzero.c src/memzero_test.c
 OUT_DIR=build
-OUT=$(OUT_DIR)/memzero_bench
+OUT=$(OUT_DIR)/memzero_test
 
 all: build
 

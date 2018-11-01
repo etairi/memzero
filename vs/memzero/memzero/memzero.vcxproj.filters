@@ -18,9 +18,15 @@
     <ClInclude Include="..\..\..\src\ds_benchmark.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\src\memzero.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\src\memzero_bench.c">
+    <ClCompile Include="..\..\..\src\memzero.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\memzero_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
