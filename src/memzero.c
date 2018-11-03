@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
@@ -54,9 +55,13 @@ void memzero_memset_s(void * const pnt, const size_t len) {
 static void * (*const volatile __memset_vp)(void *, int, size_t)
 = (memset);
 
+#ifdef _WIN32
 errno_t memset_s(void *s, size_t smax, int c, size_t n) {
 	errno_t err = 0;
-
+#else
+int memset_s(void *s, size_t smax, int c, size_t n) {
+	int err = 0;
+#endif
 	if (s == NULL) {
 		err = EINVAL;
 		goto out;
