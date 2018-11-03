@@ -25,27 +25,29 @@
 #include "ds_benchmark.h"
 #include "memzero.h"
 
-// Constants for our benchmarks.
+/* Constants for our benchmarks. */
 #define MEMZERO_TEST_SMALL_BLOCK_SIZE   0x1000L
 #define MEMZERO_TEST_LARGE_BLOCK_SIZE   0x1000000L
 #define MEMZERO_BENCH_SECONDS           1
 
-// Custom stack size which will include the secret.
+/* Custom stack size which will include the secret. */
 #ifdef _WIN32
 #define MEMZERO_STACK_SIZE				(4096 + sizeof(secret))
 #else
 #define MEMZERO_STACK_SIZE              (SIGSTKSZ + sizeof(secret))
 #endif
 
-// The secret that we write out to the stack. 
-// After cleaning, we shouldn't be able to find it in our stack.
+/**
+ * The secret that we write out to the stack. 
+ * After cleaning, we shouldn't be able to find it in our stack.
+*/
 static const char secret[24] = {
 	0x4e, 0x65, 0x76, 0x65, 0x72, 0x20, 0x67, 0x6f,
 	0x6e, 0x6e, 0x61, 0x20, 0x67, 0x69, 0x76, 0x65,
 	0x20, 0x79, 0x6f, 0x75, 0x20, 0x75, 0x70, 0x2c,
 };
 
-// Memory and pointer allocated for our stack.
+/* Memory and pointer allocated for our stack. */
 #ifdef _WIN32
 static char *stack_buf = NULL;
 PVOID stack_pointer = NULL;
@@ -61,13 +63,11 @@ typedef struct memzero_testcase {
 
 memzero_testcase_t memzero_testcases[] = {
     { memzero_alg_memset, "memset" },
+	{ memzero_alg_memset_s, "memset_s" },
     { memzero_alg_volatile1, "volatile1" },
     { memzero_alg_volatile2, "volatile2" },
     { memzero_alg_volatile3, "volatile3" },
     { memzero_alg_sodium, "sodium" },
-#ifdef __STDC_LIB_EXT1__
-    { memzero_alg_memset_s, "memset_s" },
-#endif
 #ifdef _WIN32
 	{ memzero_alg_SecureZeroMemory, "SecureZeroMemory" },
 #elif !defined(__APPLE__)
@@ -76,7 +76,7 @@ memzero_testcase_t memzero_testcases[] = {
 };
 
 #ifdef _WIN32
-// Windows does not offer memmem function by default.
+/* Windows does not offer memmem function by default. */
 void *memmem(const void *haystack, size_t haystack_len,
 			 const void * const needle, const size_t needle_len)
 {
@@ -95,13 +95,13 @@ void *memmem(const void *haystack, size_t haystack_len,
 	return NULL;
 }
 
-// Verify that we are on the custom stack.
+/* Verify that we are on the custom stack in Windows. */
 static void assert_on_stack(void) {
 	assert(stack_pointer != NULL);
 	assert(stack_pointer == GetCurrentFiber());
 }
 
-// Call the provided signal handler on a custom stack.
+/* Call the provided signal handler on a custom stack in Windows. */
 static void call_on_stack(DWORD(_stdcall Fn)(LPVOID)) {
 	main_fiber = ConvertThreadToFiber(NULL);
 	void *stack_fiber = CreateFiberEx(MEMZERO_STACK_SIZE, 0, 0, Fn, NULL);
@@ -110,14 +110,14 @@ static void call_on_stack(DWORD(_stdcall Fn)(LPVOID)) {
 	DeleteFiber(stack_fiber);
 }
 #else
-// Verify that we are on the custom stack.
+/* Verify that we are on the custom stack in Linux/macOS. */
 static void assert_on_stack(void) {
     stack_t current_stack;
     assert(0 == sigaltstack(NULL, &current_stack));
     assert(SS_ONSTACK == (current_stack.ss_flags & SS_ONSTACK));
 }
 
-// Call the provided signal handler on a custom stack.
+/* Call the provided signal handler on a custom stack in Linux/macOS. */
 static void call_on_stack(void (*fn)(int)) {
     const stack_t stack = {
         .ss_sp = stack_buf,
@@ -132,21 +132,21 @@ static void call_on_stack(void (*fn)(int)) {
     stack_t old_stack;
     struct sigaction old_action;
 
-    // Setup the stack and signal handler.
+    /* Setup the stack and signal handler. */
     assert(0 == sigaltstack(&stack, &old_stack));
     assert(0 == sigaction(SIGUSR1, &action, &old_action));
 
-    // Raise a signal. This will only return after the signal handler has returned.
+    /* Raise a signal. This will only return after the signal handler has returned. */
     assert(0 == raise(SIGUSR1));
 
-    // Restore the previous state, disable our alt stack.
+    /* Restore the previous state, disable our alt stack. */
     sigaction(SIGUSR1, &old_action, NULL);
     sigaltstack(&old_stack, NULL);
 }
 #endif
 
-/**
- * Test a provided memory clean algorithm. Must be called from the custom stack.
+/*
+ * Tests a provided memory clean algorithm. Must be called from the custom stack.
  * First writes the secret to the stack, then runs the provided cleaning algorithm.
  * If no cleaning algorithm is provided, just falls back to using memset.
  *
@@ -177,12 +177,12 @@ static char *memzero_test(memzero_func_t memzero) {
     return result;
 }
 
-/**
- * Verify the secret is where we expect it to be if things are not zeroed out properly.
- * This implementation uses memset, which should get optimized out. If optimizations are not 
+/*
+ * Verifies the secret is where we expect it to be if things are not zeroed out properly.
+ * This implementation uses memset, which should get optimized away. If optimizations are not 
  * enabled, this test is skipped.
  *
- * We can disable memset being optimized out by using the compiler flag -fno-builtin-memset in 
+ * We can disable memset being optimized away by using the compiler flag -fno-builtin-memset in 
  * GCC, and the macro #pragma optimize("", off) in MSVC.
  *
  * In GCC the macro __OPTIMIZE__ is defined in all optimizing compilations. Whereas MSVC does
@@ -196,7 +196,7 @@ static int memzero_test_correctness_noclean() {
 
     printf("%-30s", "no clean");
     if (memcmp(buf, secret, sizeof(secret)) == 0) {
-        // The secret is still present, memset was optmized out (as predicted).
+        /* The secret is still present, memset was optmized away (as predicted). */
         printf("Test passed\n");
         return 1;
     } else {
@@ -299,7 +299,7 @@ static int memzero_bench(enum memzero_alg_name alg_name, const char *name) {
 int main(void) {
     int success;
     const char *current_test;
-    size_t memzero_testcases_len = sizeof(memzero_testcases) / sizeof(struct memzero_testcase);
+    size_t memzero_testcases_len = sizeof(memzero_testcases) / sizeof(memzero_testcase_t);
 
     call_on_stack(memzero_test_correctness_signal_handler);
 

@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,6 +45,53 @@ void memzero_memset_s(void * const pnt, const size_t len) {
 		abort(); // LCOV_EXCL_LINE
 	}
 }
+#else
+/*
+ * If memset_s is not provided by the system (which is not supported by most 
+ * compilers), we define our own. The following implementation is taken from 
+ * Intel: https://github.com/intel/linux-sgx/blob/master/sdk/tlibc/string/memset_s.c
+ */
+static void * (*const volatile __memset_vp)(void *, int, size_t)
+= (memset);
+
+errno_t memset_s(void *s, size_t smax, int c, size_t n) {
+	errno_t err = 0;
+
+	if (s == NULL) {
+		err = EINVAL;
+		goto out;
+	}
+	if (smax > SIZE_MAX) {
+		err = E2BIG;
+		goto out;
+	}
+	if (n > SIZE_MAX) {
+		err = E2BIG;
+		n = smax;
+	}
+	if (n > smax) {
+		err = EOVERFLOW;
+		n = smax;
+	}
+
+	/* Calling through a volatile pointer should never be optimized away. */
+	(*__memset_vp)(s, c, n);
+
+	out:
+		if (err == 0) {
+			return 0;
+		} 
+		else {
+			errno = err;
+			return err;
+		}
+}
+
+void memzero_memset_s(void * const pnt, const size_t len) {
+	if (0U < len && memset_s(pnt, len, 0, len) != 0) {
+		abort(); /* LCOV_EXCL_LINE */
+	}
+}
 #endif
 
 #ifdef _WIN32
@@ -72,10 +120,8 @@ memzero_func_t memzero_func(enum memzero_alg_name alg_name) {
 			return &memzero_volatile3;
 		case memzero_alg_sodium:
 			return &memzero_sodium;
-	#ifdef __STDC_LIB_EXT1__
 		case memzero_alg_memset_s:
 			return &memzero_memset_s;
-	#endif
 	#ifdef _WIN32
 		case memzero_alg_SecureZeroMemory:
 			return memzero_SecureZeroMemory;
