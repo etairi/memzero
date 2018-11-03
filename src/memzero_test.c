@@ -37,7 +37,7 @@
 #define MEMZERO_STACK_SIZE              (SIGSTKSZ + sizeof(secret))
 #endif
 
-/**
+/*
  * The secret that we write out to the stack. 
  * After cleaning, we shouldn't be able to find it in our stack.
 */

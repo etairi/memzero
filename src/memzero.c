@@ -55,6 +55,10 @@ void memzero_memset_s(void * const pnt, const size_t len) {
 static void * (*const volatile __memset_vp)(void *, int, size_t)
 = (memset);
 
+/* 
+ * In Linux errno_t is defined when compiled with -std=c11. Since we do not 
+ * use this compiler flag, we opt-in to use int instead of errno_t.
+ */
 #ifdef _WIN32
 errno_t memset_s(void *s, size_t smax, int c, size_t n) {
 	errno_t err = 0;
