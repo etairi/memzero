@@ -237,7 +237,7 @@ static void memzero_test_correctness_signal_handler(int arg) {
 	(void)(arg);
 #endif
 	int success = 1;
-    size_t memzero_testcases_len = sizeof(memzero_testcases) / sizeof(struct memzero_testcase);
+    size_t memzero_testcases_len = sizeof(memzero_testcases) / sizeof(memzero_testcase_t);
     const char *current_test = NULL;
 
     printf("\n================================================================================\n");

@@ -42,7 +42,7 @@ void memzero_sodium(void * const pnt, const size_t len) {
 #ifdef __STDC_LIB_EXT1__
 void memzero_memset_s(void * const pnt, const size_t len) {
 	if (0U < len && memset_s(pnt, (rsize_t)len, 0, (rsize_t)len) != 0) {
-		abort(); // LCOV_EXCL_LINE
+		abort(); /* LCOV_EXCL_LINE */
 	}
 }
 #else
