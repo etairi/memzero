@@ -49,7 +49,7 @@ static const char secret[24] = {
 
 /* Memory and pointer allocated for our stack. */
 #ifdef _WIN32
-static char *stack_buf;
+static char *stack_buf = NULL;
 PVOID stack_pointer = NULL;
 void *main_fiber = NULL;
 #else
