@@ -49,7 +49,7 @@ static const char secret[24] = {
 
 /* Memory and pointer allocated for our stack. */
 #ifdef _WIN32
-static char *stack_buf = NULL;
+static char *stack_buf;
 PVOID stack_pointer = NULL;
 void *main_fiber = NULL;
 #else
@@ -191,10 +191,9 @@ static char *memzero_test(memzero_func_t memzero) {
  */
 static int memzero_test_correctness_noclean() {
 #if defined(__OPTIMIZE__) || defined(_MSVC_OPTIMIZE)
-    char *buf;
-    buf = memzero_test(NULL);
+	printf("%-30s", "no clean");
+    char *buf = memzero_test(NULL);
 
-    printf("%-30s", "no clean");
     if (memcmp(buf, secret, sizeof(secret)) == 0) {
         /* The secret is still present, memset was optmized away (as predicted). */
         printf("Test passed\n");
@@ -217,9 +216,9 @@ static int memzero_test_correctness_clean(enum memzero_alg_name alg_name, const 
         return 0;
     }
 
-    printf("%-30s", name);
-
+	printf("%-30s", name);
     char *buf = memzero_test(memzero);
+
     if (memcmp(buf, secret, sizeof(secret)) != 0) {
         printf("Test passed\n");
         return 1;
